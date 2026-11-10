@@ -12,6 +12,7 @@ test("checks a rotated rounded pad against foreign via copper on a six-layer boa
     height: 4,
     num_layers: 6,
     thickness: 1.6,
+    material: "fr4",
   };
   const pad: AnyCircuitElement = {
     type: "pcb_smtpad",
