@@ -53,8 +53,8 @@ test("checks a rotated rounded pad against foreign via copper on a six-layer boa
     touching,
     { ...options, mode: "gerber" },
   );
-  expect(gerber).toHaveLength(0);
+  expect(gerber).toHaveLength(1);
   expect(
     await findBitmapShorts(clear, { ...options, mode: "gerber" }),
-  ).toHaveLength(1);
+  ).toHaveLength(0);
 });
