@@ -12,13 +12,6 @@
     }
   },
   "files": {
-    "includes": [
-      "**",
-      "!node_modules",
-      "!bun.lock",
-      "!.yalc",
-      "!dist",
-      "!**/*.md"
-    ]
+    "includes": ["**", "!node_modules", "!bun.lock", "!.yalc", "!dist"]
   }
 }
