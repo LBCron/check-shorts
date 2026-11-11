@@ -50,6 +50,11 @@ test("a via on the pad's 45-degree centerline touches the pad", async () => {
     "gerber-bitmap",
     board,
     { ...options, mode: "gerber" },
+    {
+      title: "Gerber fix - short found",
+      geometry: "Via touches the 45 degree pad",
+      expectedShorts: 1,
+    },
   );
   expect(shorts).toHaveLength(1);
 });
@@ -64,6 +69,11 @@ test("moving the same via off the pad clears the short", async () => {
     "clear-gerber-bitmap",
     board,
     { ...options, mode: "gerber" },
+    {
+      title: "Gerber fix - via is clear",
+      geometry: "Via clears the 45 degree pad",
+      expectedShorts: 0,
+    },
   );
   expect(shorts).toHaveLength(0);
 });
