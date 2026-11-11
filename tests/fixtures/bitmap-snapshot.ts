@@ -8,6 +8,8 @@ import {
   encodeRgbaPng,
   renderBitmapShortDebug,
 } from "lib/index";
+import { decode } from "fast-png";
+import { createAlphabetTextSvg } from "lib/png";
 import { renderSvgToPng } from "lib/svg-to-png";
 import type {
   BitmapShort,
@@ -101,11 +103,18 @@ export const writeOrCompareBinarySnapshot = (
   });
 };
 
+type ShortSnapshotCaption = {
+  title: string;
+  geometry: string;
+  expectedShorts: number;
+};
+
 export const writeOrCompareBitmapSnapshot = async (
   testPath: string,
   snapshotSuffix: string,
   circuitJson: AnyCircuitElement[],
   options: FindBitmapShortsOptions,
+  caption?: ShortSnapshotCaption,
 ): Promise<BitmapShort[]> => {
   const debugRender = await renderBitmapShortDebug(circuitJson, options);
 
@@ -113,6 +122,7 @@ export const writeOrCompareBitmapSnapshot = async (
     testPath,
     snapshotSuffix,
     debugRender,
+    caption,
   );
 };
 
@@ -120,11 +130,51 @@ export const writeOrCompareBitmapDebugSnapshot = async (
   testPath: string,
   snapshotSuffix: string,
   debugRender: BitmapShortDebugRender,
+  caption?: ShortSnapshotCaption,
 ): Promise<BitmapShort[]> => {
+  let image = appendBitmapLegend(debugRender);
+  if (caption) {
+    const height = 86;
+    const lines = [
+      createAlphabetTextSvg({
+        text: caption.title,
+        x: 12,
+        top: 9,
+        size: 21,
+        maxWidth: image.width - 24,
+      }),
+      createAlphabetTextSvg({
+        text: caption.geometry,
+        x: 12,
+        top: 39,
+        size: 15,
+        maxWidth: image.width - 24,
+      }),
+      createAlphabetTextSvg({
+        text: `Shorts expected ${caption.expectedShorts} / detected ${debugRender.shorts.length}`,
+        x: 12,
+        top: 61,
+        size: 15,
+        maxWidth: image.width - 24,
+      }),
+    ];
+    const header = decode(
+      renderSvgToPng(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${image.width}" height="${height}"><rect width="100%" height="100%" fill="white"/>${lines.join("")}</svg>`,
+      ),
+    );
+    if (header.channels !== 4 || header.depth !== 8) {
+      throw new Error("Expected an RGBA snapshot caption");
+    }
+    const rgba = new Uint8Array(header.data.length + image.rgba.length);
+    rgba.set(header.data);
+    rgba.set(image.rgba, header.data.length);
+    image = { ...image, height: image.height + height, rgba };
+  }
   await writeOrCompareBinarySnapshot(
     testPath,
     snapshotSuffix,
-    encodeRgbaPng(appendBitmapLegend(debugRender)),
+    encodeRgbaPng(image),
   );
 
   return debugRender.shorts;
