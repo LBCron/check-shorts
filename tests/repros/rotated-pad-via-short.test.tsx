@@ -1,6 +1,5 @@
 import { expect, test } from "bun:test";
-import { findBitmapShorts } from "lib/index";
-import { writeOrCompareBitmapSnapshot } from "tests/fixtures/bitmap-snapshot";
+import { comparePcbAndGerberShorts } from "tests/fixtures/bitmap-snapshot";
 import { getTestFixture } from "tests/fixtures/get-test-fixture";
 
 async function boardWithVia(x: number, y: number) {
@@ -38,42 +37,24 @@ async function boardWithVia(x: number, y: number) {
   return circuit.getCircuitJson();
 }
 
-const options = { layer: "top" as const, width: 320, height: 320 };
-
-test("a via on the pad's 45-degree centerline touches the pad", async () => {
+test("a via on the diagonal pad should short in both modes", async () => {
   const board = await boardWithVia(0.65, 0.65);
-  expect(
-    await findBitmapShorts(board, { ...options, mode: "pcb" }),
-  ).toHaveLength(1);
-  const shorts = await writeOrCompareBitmapSnapshot(
+  const counts = await comparePcbAndGerberShorts(
     import.meta.path,
     "gerber-bitmap",
     board,
-    { ...options, mode: "gerber" },
-    {
-      title: "Gerber fix - short found",
-      geometry: "Via touches the 45 degree pad",
-      expectedShorts: 1,
-    },
+    "Via touches the diagonal pad",
   );
-  expect(shorts).toHaveLength(1);
+  expect(counts).toEqual({ pcb: 1, gerber: 1 });
 });
 
-test("moving the same via off the pad clears the short", async () => {
+test("moving the via beside the same pad should clear the short", async () => {
   const board = await boardWithVia(0.85, 0);
-  expect(
-    await findBitmapShorts(board, { ...options, mode: "pcb" }),
-  ).toHaveLength(0);
-  const shorts = await writeOrCompareBitmapSnapshot(
+  const counts = await comparePcbAndGerberShorts(
     import.meta.path,
     "clear-gerber-bitmap",
     board,
-    { ...options, mode: "gerber" },
-    {
-      title: "Gerber fix - via is clear",
-      geometry: "Via clears the 45 degree pad",
-      expectedShorts: 0,
-    },
+    "Via sits beside the diagonal pad",
   );
-  expect(shorts).toHaveLength(0);
+  expect(counts).toEqual({ pcb: 0, gerber: 0 });
 });

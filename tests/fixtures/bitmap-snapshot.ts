@@ -8,9 +8,8 @@ import {
   encodeRgbaPng,
   renderBitmapShortDebug,
 } from "lib/index";
-import { decode } from "fast-png";
-import { createAlphabetTextSvg } from "lib/png";
 import { renderSvgToPng } from "lib/svg-to-png";
+import { createAlphabetTextSvg } from "lib/png";
 import type {
   BitmapShort,
   BitmapShortDebugRender,
@@ -103,18 +102,11 @@ export const writeOrCompareBinarySnapshot = (
   });
 };
 
-type ShortSnapshotCaption = {
-  title: string;
-  geometry: string;
-  expectedShorts: number;
-};
-
 export const writeOrCompareBitmapSnapshot = async (
   testPath: string,
   snapshotSuffix: string,
   circuitJson: AnyCircuitElement[],
   options: FindBitmapShortsOptions,
-  caption?: ShortSnapshotCaption,
 ): Promise<BitmapShort[]> => {
   const debugRender = await renderBitmapShortDebug(circuitJson, options);
 
@@ -122,7 +114,6 @@ export const writeOrCompareBitmapSnapshot = async (
     testPath,
     snapshotSuffix,
     debugRender,
-    caption,
   );
 };
 
@@ -130,52 +121,47 @@ export const writeOrCompareBitmapDebugSnapshot = async (
   testPath: string,
   snapshotSuffix: string,
   debugRender: BitmapShortDebugRender,
-  caption?: ShortSnapshotCaption,
 ): Promise<BitmapShort[]> => {
-  let image = appendBitmapLegend(debugRender);
-  if (caption) {
-    const height = 86;
-    const lines = [
-      createAlphabetTextSvg({
-        text: caption.title,
-        x: 12,
-        top: 9,
-        size: 21,
-        maxWidth: image.width - 24,
-      }),
-      createAlphabetTextSvg({
-        text: caption.geometry,
-        x: 12,
-        top: 39,
-        size: 15,
-        maxWidth: image.width - 24,
-      }),
-      createAlphabetTextSvg({
-        text: `Shorts expected ${caption.expectedShorts} / detected ${debugRender.shorts.length}`,
-        x: 12,
-        top: 61,
-        size: 15,
-        maxWidth: image.width - 24,
-      }),
-    ];
-    const header = decode(
-      renderSvgToPng(
-        `<svg xmlns="http://www.w3.org/2000/svg" width="${image.width}" height="${height}"><rect width="100%" height="100%" fill="white"/>${lines.join("")}</svg>`,
-      ),
-    );
-    if (header.channels !== 4 || header.depth !== 8) {
-      throw new Error("Expected an RGBA snapshot caption");
-    }
-    const rgba = new Uint8Array(header.data.length + image.rgba.length);
-    rgba.set(header.data);
-    rgba.set(image.rgba, header.data.length);
-    image = { ...image, height: image.height + height, rgba };
-  }
   await writeOrCompareBinarySnapshot(
     testPath,
     snapshotSuffix,
-    encodeRgbaPng(image),
+    encodeRgbaPng(appendBitmapLegend(debugRender)),
   );
 
   return debugRender.shorts;
 };
+
+// Both modes rasterize the same top-layer input. Embed the original RGBA pixels
+// at 1:1 scale so a change in the pad angle or short marker is visible.
+export async function comparePcbAndGerberShorts(
+  testPath: string,
+  suffix: string,
+  circuitJson: AnyCircuitElement[],
+  title: string,
+) {
+  const options = { layer: "top" as const, width: 320, height: 320 };
+  const pcb = await renderBitmapShortDebug(circuitJson, {
+    ...options,
+    mode: "pcb",
+  });
+  const gerber = await renderBitmapShortDebug(circuitJson, {
+    ...options,
+    mode: "gerber",
+  });
+  const panel = (label: string, render: BitmapShortDebugRender, x: number) => {
+    const count = render.shorts.length;
+    const caption = `${label} - ${count} ${count === 1 ? "short" : "shorts"}`;
+    const image = Buffer.from(encodeRgbaPng(render)).toString("base64");
+    return `${createAlphabetTextSvg({ text: caption, x: x + 10, top: 47, size: 17 })}
+      <image x="${x}" y="74" width="320" height="320" href="data:image/png;base64,${image}"/>`;
+  };
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="648" height="431">
+    <rect width="100%" height="100%" fill="white"/>
+    ${createAlphabetTextSvg({ text: title, x: 10, top: 10, size: 21 })}
+    ${panel("PCB copper", pcb, 0)}
+    ${panel("Gerber checker", gerber, 328)}
+    ${createAlphabetTextSvg({ text: "Salmon = pad    Blue = via    Pink ring = detected short", x: 10, top: 405, size: 16, maxWidth: 628 })}
+  </svg>`;
+  await writeOrCompareBinarySnapshot(testPath, suffix, renderSvgToPng(svg));
+  return { pcb: pcb.shorts.length, gerber: gerber.shorts.length };
+}
